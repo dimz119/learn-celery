@@ -1,0 +1,82 @@
+version: "3.9"
+
+services:
+  app:
+    build:
+      context: .
+      args:
+        - DEV=true
+    ports:
+      - "8000:8000"
+    environment:
+      POSTGRES_DB: app
+      POSTGRES_USER: root
+      POSTGRES_PASSWORD: admin
+      POSTGRES_HOST: db
+
+    volumes:
+      - ./app:/app
+    command: >
+      sh -c "python manage.py runserver 0.0.0.0:8000"
+    depends_on:
+      - redis
+
+  redis:
+    image: redis:7.2.3
+
+  celery-beat:
+    build:
+      context: .
+    volumes:
+      - ./app:/app
+    environment:
+      POSTGRES_DB: app
+      POSTGRES_USER: root
+      POSTGRES_PASSWORD: admin
+      POSTGRES_HOST: db
+    command: celery -A worker beat -l INFO --scheduler django_celery_beat.schedulers:DatabaseScheduler
+    depends_on:
+      - redis
+
+  celery:
+    build:
+      context: .
+    volumes:
+      - ./app:/app
+    environment:
+      POSTGRES_DB: app
+      POSTGRES_USER: root
+      POSTGRES_PASSWORD: admin
+      POSTGRES_HOST: db
+    # Note that -B is for development purpose, for production, you need to have seperate process to run the beat
+    # https://docs.celeryq.dev/en/stable/userguide/periodic-tasks.html#starting-the-scheduler
+    # command: celery --app=worker worker -l INFO -Q celery,celery:1,celery:2 -B
+    command: celery --app=worker worker -l INFO -Q celery,celery:1,celery:2
+    depends_on:
+      - redis
+
+  db:
+    image: postgres:15
+    environment:
+      POSTGRES_DB: app
+      POSTGRES_USER: root
+      POSTGRES_PASSWORD: admin
+
+  flower:
+    image: mher/flower:2.0.1
+    ports:
+      - "5555:5555"
+    environment:
+      - CELERY_BROKER_URL=redis://redis:6379/0
+    depends_on:
+      - celery
+  #     - celery-standalone
+
+  # celery-standalone:
+  #   build:
+  #     context: standalone_celery
+  #   volumes:
+  #     - ./standalone_celery:/app
+  #   command: celery --app=main worker -l INFO -Q celery3,celery:4,celery:5
+  #   depends_on:
+  #     - redis
