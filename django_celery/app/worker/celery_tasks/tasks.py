@@ -22,7 +22,8 @@ class CustomTask(Task):
 # Register custom task class with Celery
 app.task(base=CustomTask)
 
-@app.task(queue='celery', base=CustomTask)
+@app.task(queue='celery', base=CustomTask,
+          autoretry_for=(IOError,), max_retries=3, default_retry_delay=10)
 def my_super_task():
     # try:
     raise IOError("File X does not exists")
