@@ -1,5 +1,5 @@
 import logging
-from celery import Task
+from celery import Task, group
 from worker.celery import app
 
 # Define custom task class
@@ -29,3 +29,31 @@ def my_super_task():
     raise IOError("File X does not exists")
     # except IOError as e:
     #     logging.error(e)
+
+@app.task(queue='celery')
+def is_positive_number(num: int):
+    if num < 0:
+        raise ValueError(f"{num} is negative..")
+    return True
+
+# https://docs.celeryq.dev/en/stable/userguide/canvas.html#group-results
+def run_group():
+    g = group(
+        is_positive_number.s(2),
+        is_positive_number.s(4),
+        is_positive_number.s(-1)) # type: ignore
+    result = g.apply_async()
+
+    print(f"ready: {result.ready()}")  # have all subtasks completed?
+    print(f"successful: {result.successful()}") # were all subtasks successful?
+
+    try:
+        result.get()
+    except ValueError as e:
+        print(e)
+
+    print(f"ready: {result.ready()}")  # have all subtasks completed?
+    print(f"successful: {result.successful()}") # were all subtasks successful?
+
+    for elem in result:
+        print(elem.status)
