@@ -1,4 +1,5 @@
 import logging
+import traceback
 from celery import Task, group
 from worker.celery import app
 
@@ -30,11 +31,22 @@ def my_super_task():
     # except IOError as e:
     #     logging.error(e)
 
-@app.task(queue='celery')
-def is_positive_number(num: int):
-    if num < 0:
-        raise ValueError(f"{num} is negative..")
-    return True
+@app.task(bind=True, queue='celery')
+def is_positive_number(self, num: int):
+    try:
+        if num < 0:
+            raise ValueError(f"{num} is negative..")
+        return True
+    except Exception as e:
+        traceback_str = traceback.format_exc()
+        handle_error.apply_async(args=[self.request.id, str(e), traceback_str])
+
+@app.task(queue="dlq")
+def handle_error(task_id, exception, traceback_str):
+    print(f"task_id: {task_id}")
+    print(f"exception: {exception}")
+    print(f"traceback_str: {traceback_str}")
+
 
 # https://docs.celeryq.dev/en/stable/userguide/canvas.html#group-results
 def run_group():
