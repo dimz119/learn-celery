@@ -1,4 +1,5 @@
 import logging
+import time
 import traceback
 from celery import Task, group
 from worker.celery import app
@@ -47,6 +48,11 @@ def handle_error(task_id, exception, traceback_str):
     print(f"exception: {exception}")
     print(f"traceback_str: {traceback_str}")
 
+# @app.task(queue="celery", time_limit=5)
+@app.task(queue="celery")
+def long_running_job():
+    time.sleep(10)
+    print("finished long_running_job")
 
 # https://docs.celeryq.dev/en/stable/userguide/canvas.html#group-results
 def run_group():
@@ -69,3 +75,9 @@ def run_group():
 
     for elem in result:
         print(elem.status)
+
+
+def simulating_timeout():
+    result = long_running_job.delay()
+    result.get(timeout=3)
+    
