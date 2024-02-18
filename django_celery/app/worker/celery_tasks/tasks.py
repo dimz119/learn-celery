@@ -3,6 +3,7 @@ import time
 import traceback
 from celery import Task, group
 from worker.celery import app
+from worker.tasks import add
 
 # Define custom task class
 class CustomTask(Task):
@@ -80,4 +81,23 @@ def run_group():
 def simulating_timeout():
     result = long_running_job.delay()
     result.get(timeout=3)
-    
+
+
+@app.task(queue="celery")
+def multiply(result, z):
+    return result * z
+
+@app.task(queue="celery")
+def error_handler(request, exc, traceback):
+    print('Task {0} raised exception: {1!r}\n{2!r}'.format(
+          request.id, exc, traceback))
+
+def simulating_link():
+    result = add.apply_async(
+                args=[2, "error"],
+                link=multiply.s(10),
+                link_error=error_handler.s()) # type: ignore
+    # parent result
+    print(result.get())
+    # child result
+    print(result.children[0].get())
