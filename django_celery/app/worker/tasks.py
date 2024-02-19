@@ -1,6 +1,6 @@
 import time
 from celery import shared_task
-from celery.signals import task_prerun, task_postrun
+from celery.signals import task_prerun, task_postrun, task_failure
 
 @shared_task(queue='celery')
 def print_result(x, y, msg=None):
@@ -63,10 +63,19 @@ def task_prerun_handler(sender, task_id, task, args, kwargs, **kwargs_extra):
 def task_postrun_handler(sender, task_id, task, args, kwargs, retval, state, **kwargs_extra):
     print(f"Task {task_id} has completed: {task.name} with result {retval}")
 
+@task_failure.connect(sender=add)
+def task_failure_handler(sender, task_id, exception, args, kwargs, traceback, einfo, **kwargs_extra):
+    print(f"Task {task_id} has failed: {sender.name} with exception {exception}")
+    task_failure_clean_up.delay(task_id=task_id) # type: ignore
+
+@shared_task(queue='celery')
+def task_failure_clean_up(task_id, *args, **kwargs):
+    print(f"Task {task_id} clean up process has been started")
+
 # simulating task signal
 def simulating_task_signal():
     # Call the Celery task asynchronously
-    result = add.delay(2, 3) # type: ignore
+    result = add.delay(2, "error") # type: ignore
 
     # Get the result of the task
     final_result = result.get()
